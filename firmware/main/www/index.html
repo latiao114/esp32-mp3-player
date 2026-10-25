@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#181818">
+<title>ESP32 音乐播放器 · 配网</title>
+<style>
+  /* ── 我的世界 · 柔和版 ────────────────────────────────────────
+     保留：草绿配色、苦力怕图标、方块式按钮的厚度感。
+     去掉：直角、像素颗粒、硬边框、文字硬阴影、跳帧动画。
+     目标是"看着像 MC，摸着不硌手"。                          */
+  :root{
+    --bg:#181818;
+    --panel:#2b2b2b;
+    --panel-2:#242424;
+    --panel-3:#363636;
+    --line:#3a3a3a;
+    --slot:#202020;
+    --grass:#5da13f;
+    --grass-2:#4a8331;
+    --grass-l:#7bc45a;
+    --grass-dark:#2f5620;
+    --diamond:#4aedd9;
+    --text:#ececec;
+    --text-2:#9a9a9a;
+    --danger:#d9534f;
+    --warn:#d9a441;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 480px at 50% -180px,#252525 0%,transparent 65%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    min-height:100vh;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:28px 18px 40px}
+
+  /* ---------- 顶部 ---------- */
+  header{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+  .logo{
+    width:54px;height:54px;flex:0 0 54px;
+    border-radius:14px;
+    background:linear-gradient(160deg,#569a3e,#427a2f);
+    display:grid;place-items:center;padding:7px;
+    box-shadow:0 4px 14px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  .logo svg{width:100%;height:100%;display:block}
+  h1{margin:0;font-size:20px;font-weight:650;letter-spacing:.2px}
+  .sub{margin:4px 0 0;font-size:13px;color:var(--text-2)}
+
+  /* ---------- 卡片 ---------- */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:0 2px 10px rgba(0,0,0,.28);
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .card-head{
+    padding:12px 15px;font-size:12.5px;color:var(--text-2);
+    background:var(--panel-2);
+    display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--line);
+  }
+  .refresh{
+    background:var(--panel-3);
+    border:1px solid #454545;
+    border-radius:8px;
+    color:var(--text);
+    font-size:12px;
+    padding:5px 11px;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .refresh:hover{background:#3f3f3f}
+  .refresh:active{background:#2c2c2c}
+  .refresh:disabled{color:#6d6d6d;cursor:not-allowed}
+
+  /* ---------- Wi-Fi 列表 ---------- */
+  .net{
+    display:flex;align-items:center;gap:12px;
+    padding:13px 15px;cursor:pointer;
+    border-bottom:1px solid #333;
+    transition:background .15s;
+  }
+  .net:last-child{border-bottom:0}
+  .net:hover{background:#333}
+  .net:active{background:#3a3a3a}
+  .net.sel{background:rgba(93,161,63,.14);box-shadow:inset 3px 0 0 var(--grass)}
+  .net-name{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .net-lock{font-size:12px;color:var(--text-2)}
+
+  /* 信号强度条 */
+  .bars{display:flex;align-items:flex-end;gap:2px;height:14px;flex:0 0 auto}
+  .bars i{width:3.5px;border-radius:2px;background:#3d3d3d}
+  .bars i:nth-child(1){height:4px}
+  .bars i:nth-child(2){height:7px}
+  .bars i:nth-child(3){height:10px}
+  .bars i:nth-child(4){height:14px}
+  .bars.s1 i:nth-child(-n+1),.bars.s2 i:nth-child(-n+2),
+  .bars.s3 i:nth-child(-n+3),.bars.s4 i:nth-child(-n+4){
+    background:var(--grass);
+  }
+  .bars.s1 i:nth-child(-n+1){background:var(--danger)}
+  .bars.s2 i:nth-child(-n+2){background:var(--warn)}
+
+  /* ---------- 空 / 加载 ---------- */
+  .empty{padding:34px 16px;text-align:center;color:var(--text-2);font-size:14px}
+  .spin{
+    width:26px;height:26px;margin:0 auto 12px;
+    border:2.5px solid #3a3a3a;
+    border-top-color:var(--grass);
+    border-radius:50%;
+    animation:sp .8s linear infinite;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ---------- 密码区 ---------- */
+  #pane-pwd{padding:0}
+  .pane-title{font-size:13.5px;color:var(--text-2);margin-bottom:12px}
+  .pane-title b{color:var(--grass-l);font-weight:650}
+  input[type=password],input[type=text]{
+    width:100%;padding:13px 15px;font-size:16px;
+    background:var(--slot);
+    border:1px solid #3f3f3f;
+    border-radius:10px;
+    color:var(--text);outline:none;
+    transition:border-color .15s,box-shadow .15s;
+  }
+  input:focus{border-color:var(--grass);box-shadow:0 0 0 3px rgba(93,161,63,.16)}
+  input::placeholder{color:#666}
+  .show-pwd{
+    display:flex;align-items:center;gap:8px;margin-top:12px;
+    font-size:13px;color:var(--text-2);cursor:pointer;user-select:none;
+  }
+  .show-pwd input{width:16px;height:16px;accent-color:var(--grass)}
+
+  button.primary{
+    width:100%;margin-top:16px;padding:14px;
+    font-size:16px;font-weight:650;color:#fff;
+    background:linear-gradient(180deg,#6fb64c,#4d8a33);
+    border:1px solid #3d7028;
+    border-radius:10px;
+    cursor:pointer;
+    letter-spacing:.5px;
+    box-shadow:0 3px 0 var(--grass-dark),0 5px 14px rgba(0,0,0,.32),
+               inset 0 1px 0 rgba(255,255,255,.22);
+    transition:transform .08s,box-shadow .08s;
+  }
+  button.primary:active{
+    transform:translateY(2px);
+    box-shadow:0 1px 0 var(--grass-dark),inset 0 1px 0 rgba(255,255,255,.15);
+  }
+  button.primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+  /* ---------- 提示 ---------- */
+  .toast{
+    margin-top:14px;padding:12px 14px;
+    font-size:13.5px;line-height:1.6;display:none;
+    border-radius:10px;
+    border:1px solid transparent;
+  }
+  .toast.on{display:block}
+  .toast.ok{background:rgba(93,161,63,.16);border-color:rgba(93,161,63,.45);color:#b6e59a}
+  .toast.err{background:rgba(217,83,79,.15);border-color:rgba(217,83,79,.45);color:#f0a09d}
+  .toast.wait{background:rgba(217,164,65,.13);border-color:rgba(217,164,65,.4);color:#ecc77e}
+
+  /* ---------- 设备信息 ---------- */
+  .kv{display:flex;justify-content:space-between;padding:10px 15px;font-size:13px;border-bottom:1px solid #333}
+  .kv:last-child{border-bottom:0}
+  .kv span:first-child{color:var(--text-2)}
+  .kv span:last-child{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+
+  .hint{padding:0 4px;font-size:12px;color:#7a7a7a;line-height:1.8;margin-top:8px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <!-- 草方块：顶上一层草、下面泥土，MC 最标志性的方块 -->
+    <div class="logo">
+      <svg viewBox="0 0 8 8" aria-hidden="true">
+        <rect width="8" height="8" fill="#7a5a3a"/>
+        <rect width="8" height="2.4" fill="#5da13f"/>
+        <rect y="2.4" width="8" height="0.7" fill="#4a8331"/>
+        <rect x="1" y="3.1" width="1" height="0.9" fill="#5da13f"/>
+        <rect x="4" y="3.1" width="1.1" height="1.3" fill="#5da13f"/>
+        <rect x="6.3" y="3.1" width="0.8" height="0.8" fill="#5da13f"/>
+        <rect x="2" y="4.8" width="1.1" height="1" fill="#6b4f33"/>
+        <rect x="5.1" y="5.6" width="1.2" height="1" fill="#6b4f33"/>
+        <rect x="0.6" y="6.4" width="0.9" height="0.8" fill="#8b6a46"/>
+      </svg>
+    </div>
+    <div>
+      <h1>ESP32 音乐播放器</h1>
+      <p class="sub">把设备连上你的 Wi-Fi</p>
+    </div>
+  </header>
+
+  <!-- 当前连接状态：连上之后才显示 -->
+  <div class="card" id="status-card" style="display:none">
+    <div class="card-head">
+      <span>当前网络</span>
+      <span style="color:var(--grass-l);font-size:12px">已连接</span>
+    </div>
+    <div class="kv"><span>Wi-Fi 名称</span><span id="cur-ssid">—</span></div>
+    <div class="kv"><span>IP 地址</span><span id="cur-ip">—</span></div>
+  </div>
+
+  <!-- 附近的网络 -->
+  <div class="card">
+    <div class="card-head">
+      <span>附近的 Wi-Fi</span>
+      <button class="refresh" id="btn-scan">重新扫描</button>
+    </div>
+    <div id="nets">
+      <div class="empty"><div class="spin"></div>正在扫描…</div>
+    </div>
+  </div>
+
+  <!-- 密码 -->
+  <div class="card hidden" id="pane-pwd">
+    <div id="pwdbody" style="padding:16px">
+      <div class="pane-title">连接到 <b id="target">—</b></div>
+      <input type="password" id="pwd" placeholder="Wi-Fi 密码" autocomplete="current-password">
+      <label class="show-pwd">
+        <input type="checkbox" id="show"> 显示密码
+      </label>
+      <button class="primary" id="btn-connect">连接</button>
+    </div>
+    <div class="kv"><span>设备热点</span><span id="apssid">—</span></div>
+    <div class="kv"><span>页面地址</span><span>192.168.4.1</span></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="hint">
+    连接成功后设备会自动连接你的 Wi-Fi。<br>
+    如果连不上，设备会继续重试；实在连不上会重新开放热点，你再回来配置一次就行。
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var selected = null;
+  var busy = false;
+
+  function toast(msg, kind){
+    var t = $('toast');
+    t.className = 'toast on ' + (kind || 'wait');
+    t.textContent = msg;
+  }
+  function clearToast(){ $('toast').className = 'toast'; }
+
+  function barsClass(rssi){
+    if (rssi >= -55) return 's4';
+    if (rssi >= -67) return 's3';
+    if (rssi >= -78) return 's2';
+    return 's1';
+  }
+
+  function renderNets(list){
+    var box = $('nets');
+    box.innerHTML = '';
+    if (!list || !list.length){
+      box.innerHTML = '<div class="empty">没有扫到 Wi-Fi，换个位置再试试</div>';
+      return;
+    }
+    list.sort(function(a,b){ return b.rssi - a.rssi; });
+    list.forEach(function(n){
+      var d = document.createElement('div');
+      d.className = 'net';
+      d.innerHTML =
+        '<div class="bars ' + barsClass(n.rssi) + '"><i></i><i></i><i></i><i></i></div>' +
+        '<div class="net-name"></div>' +
+        (n.auth ? '<div class="net-lock">🔒</div>' : '');
+      d.querySelector('.net-name').textContent = n.ssid;
+      d.onclick = function(){
+        if (busy) return;
+        selected = n.ssid;
+        Array.prototype.forEach.call(box.children, function(c){ c.classList.remove('sel'); });
+        d.classList.add('sel');
+        $('target').textContent = n.ssid;
+        $('pane-pwd').classList.remove('hidden');
+        clearToast();
+        setTimeout(function(){ $('pwd').focus(); }, 50);
+      };
+      box.appendChild(d);
+    });
+  }
+
+  function scan(){
+    var b = $('btn-scan');
+    b.disabled = true;
+    $('nets').innerHTML = '<div class="empty"><div class="spin"></div>正在扫描…</div>';
+    fetch('/scan').then(function(r){ return r.json(); }).then(function(j){
+      renderNets(j.networks || []);
+      b.disabled = false;
+    }).catch(function(){
+      $('nets').innerHTML = '<div class="empty">扫描失败，点右上角重试</div>';
+      b.disabled = false;
+    });
+  }
+
+  function connect(){
+    if (!selected || busy) return;
+    var pwd = $('pwd').value;
+    busy = true;
+    $('btn-connect').disabled = true;
+    toast('正在连接 ' + selected + ' …', 'wait');
+
+    fetch('/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'ssid=' + encodeURIComponent(selected) + '&password=' + encodeURIComponent(pwd)
+    }).then(function(r){ return r.json(); }).then(function(j){
+      if (j.ok){
+        toast(j.message || '连接成功！设备正在重启…', 'ok');
+        pollStatus();
+      } else {
+        toast(j.message || '连接失败，检查密码后重试', 'err');
+        busy = false; $('btn-connect').disabled = false;
+      }
+    }).catch(function(){
+      toast('请求失败，请重试', 'err');
+      busy = false; $('btn-connect').disabled = false;
+    });
+  }
+
+  function pollStatus(){
+    fetch('/status').then(function(r){ return r.json(); }).then(function(j){
+      if (j.state === 'connected'){
+        toast('已连接！IP: ' + (j.ip || '获取中'), 'ok');
+      } else if (j.state === 'failed'){
+        toast('连接失败：' + (j.reason || '密码错误或信号太弱'), 'err');
+        busy = false; $('btn-connect').disabled = false;
+      } else {
+        setTimeout(pollStatus, 1200);
+      }
+    }).catch(function(){ setTimeout(pollStatus, 1500); });
+  }
+
+  $('btn-scan').onclick = scan;
+  $('btn-connect').onclick = connect;
+  $('show').onchange = function(){
+    $('pwd').type = this.checked ? 'text' : 'password';
+  };
+  $('pwd').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') connect();
+  });
+
+  /* 显示当前已经连上的 Wi-Fi —— 配完网回来能一眼看到连的是哪个 */
+  function refreshStatus(){
+    fetch('/status').then(function(r){ return r.json(); }).then(function(j){
+      var card = $('status-card');
+      if (j.state === 'connected'){
+        card.style.display = 'block';
+        $('cur-ssid').textContent = j.ssid || '已连接';
+        $('cur-ip').textContent   = j.ip || '—';
+      } else {
+        card.style.display = 'none';
+      }
+    }).catch(function(){});
+  }
+  refreshStatus();
+  setInterval(refreshStatus, 5000);
+
+  // 进页面自动扫一次
+  scan();
+})();
+</script>
+</body>
+</html>

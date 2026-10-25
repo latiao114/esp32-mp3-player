@@ -1,0 +1,51 @@
+# ESP32-S3 音乐播放器 —— 默认配置
+#
+# 只放"和功能相关、而且一定要这样"的项。
+
+# ── 控制台输出口 ────────────────────────────────────────────
+# 板子插的是「USB」口（原生 USB-Serial-JTAG，VID_303A:PID_1001）
+# 所以控制台走 USB-Serial-JTAG，一根线就能烧录 + 看日志。
+#
+# ⚠️ 如果你以后改插板子上标「UART」的那个口（CH340，会显示成另一个 COM 号），
+#    要把下面这行换成 CONFIG_ESP_CONSOLE_UART_DEFAULT=y，否则看不到日志。
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# ── Flash 与分区表 ──────────────────────────────────────────
+# 实际 Flash 是 16MB（esptool 读出来 16384k），但默认配置只按 2MB 算，
+# 导致 app 分区只有 1MB、后面 14MB 全浪费。
+# 这里显式声明 16MB 并使用自定义分区表（见 partitions.csv）：
+#   app 4MB + 数据区 12MB，为后面的 MP3 解码和音乐存储留足空间。
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ── 性能 ────────────────────────────────────────────────────
+# 主频拉满，软解 MP3 需要
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# FreeRTOS 时基 1000Hz（1ms 一个 tick），音频任务调度更细
+CONFIG_FREERTOS_HZ=1000
+
+# ── PSRAM（板子是 N16R8：16MB Flash + 8MB Octal PSRAM）──────
+# 这块 PSRAM 之前一直是关着的，8MB 全闲着。
+# 现在打开，理由有二：
+#   1. 在线搜歌翻页时，iTunes 返回的 JSON 要整块解析，cJSON 占用的内存
+#      约是原文的 3 倍，翻到第 3 页就能吃掉 200KB+ 内部 RAM；
+#   2. 后面的 MP3 软解本来就需要大块解码缓冲。
+# ⚠️ N16R8 是 Octal（8 线）PSRAM，必须选 OCT；选成默认的 QUAD 会启动失败。
+#    若换用 Quad PSRAM 的板子（如 N8R2），把 MODE_OCT 改成 MODE_QUAD。
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# ── 网络吞吐 ────────────────────────────────────────────────
+# TCP 发送窗口默认只有 5760 字节（4 个 MSS）。传 4MB 的 MP3 时会被
+# 窗口卡住，实测只有约 260KB/s —— 一首歌要 15 秒，切歌明显卡顿。
+# 加到 32KB 能明显提升大文件传输。
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
+CONFIG_LWIP_TCP_WND_DEFAULT=32768
+
+# ── HTTPS 根证书 ────────────────────────────────────────────
+# 访问苹果的音乐接口要用 HTTPS，需要根证书包做校验
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y

@@ -1,0 +1,24 @@
+# ESP-IDF 构建产物
+build/
+managed_components/
+dependencies.lock.bak
+
+# 本机配置（由 sdkconfig.defaults 生成）
+sdkconfig
+sdkconfig.old
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+
+# 日志
+*.log

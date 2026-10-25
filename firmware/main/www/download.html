@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#181818">
+<title>音乐库 · ESP32</title>
+<style>
+  /* ── 我的世界 · 柔和版（与配网页同一套）────────────────────── */
+  :root{
+    --bg:#181818;
+    --panel:#2b2b2b;
+    --panel-2:#242424;
+    --panel-3:#363636;
+    --line:#3a3a3a;
+    --slot:#202020;
+    --grass:#5da13f;
+    --grass-2:#4a8331;
+    --grass-l:#7bc45a;
+    --grass-dark:#2f5620;
+    --text:#ececec;
+    --text-2:#9a9a9a;
+    --danger:#d9534f;
+    --warn:#d9a441;
+    --radius:12px;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 480px at 50% -180px,#252525 0%,transparent 65%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:env(safe-area-inset-top) 0 calc(104px + env(safe-area-inset-bottom));
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:24px 16px 20px}
+
+  header{display:flex;align-items:center;gap:13px;margin-bottom:18px}
+  .logo{
+    width:52px;height:52px;flex:0 0 52px;
+    border-radius:14px;
+    background:linear-gradient(160deg,#333,#242424);
+    display:grid;place-items:center;padding:7px;
+    box-shadow:0 4px 14px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .logo svg{width:100%;height:100%;display:block}
+  h1{margin:0;font-size:19px;font-weight:650;letter-spacing:.2px}
+  .sub{margin:4px 0 0;font-size:12.5px;color:var(--text-2)}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:0 2px 10px rgba(0,0,0,.28);
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .card-head{
+    padding:12px 15px;font-size:12.5px;color:var(--text-2);
+    background:var(--panel-2);
+    display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--line);
+  }
+
+  .refresh{
+    background:var(--panel-3);
+    border:1px solid #454545;
+    border-radius:8px;
+    color:var(--text);
+    font-size:12px;
+    padding:5px 11px;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .refresh:hover{background:#434343}
+  .refresh:active{background:#2c2c2c}
+
+  /* 搜索 */
+  .searchbox{display:flex;gap:9px;padding:13px}
+  .searchbox input{
+    flex:1;min-width:0;padding:12px 14px;font-size:15px;
+    background:var(--slot);
+    border:1px solid #3f3f3f;
+    border-radius:10px;
+    color:var(--text);outline:none;
+    transition:border-color .15s,box-shadow .15s;
+  }
+  .searchbox input:focus{border-color:var(--grass);box-shadow:0 0 0 3px rgba(93,161,63,.16)}
+  .searchbox input::placeholder{color:#666}
+  .searchbox button{
+    flex:0 0 auto;padding:0 18px;font-size:15px;font-weight:650;color:#fff;
+    background:linear-gradient(180deg,#6fb64c,#4d8a33);
+    border:1px solid #3d7028;
+    border-radius:10px;
+    cursor:pointer;
+    box-shadow:0 3px 0 var(--grass-dark),0 5px 14px rgba(0,0,0,.3),
+               inset 0 1px 0 rgba(255,255,255,.22);
+    transition:transform .08s,box-shadow .08s;
+  }
+  .searchbox button:active{
+    transform:translateY(2px);
+    box-shadow:0 1px 0 var(--grass-dark),inset 0 1px 0 rgba(255,255,255,.15);
+  }
+  .searchbox button:disabled{opacity:.5;transform:none}
+
+  /* 歌曲条目 */
+  .song{
+    display:flex;align-items:center;gap:12px;padding:11px 13px;
+    border-bottom:1px solid #333;cursor:pointer;
+    transition:background .15s;
+  }
+  .song:last-child{border-bottom:0}
+  .song:hover{background:#333}
+  .song:active{background:#3a3a3a}
+  .song.playing{background:rgba(93,161,63,.14);box-shadow:inset 3px 0 0 var(--grass)}
+  .cover{
+    width:44px;height:44px;flex:0 0 44px;
+    border-radius:9px;
+    background:var(--slot);
+    object-fit:cover;
+  }
+  .song-info{flex:1;min-width:0}
+  .song-name{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .song-artist{font-size:11.5px;color:var(--text-2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .song-dur{font-size:11px;color:var(--text-2);flex:0 0 auto}
+
+  .empty{padding:34px 16px;text-align:center;color:var(--text-2);font-size:13.5px;line-height:1.8}
+  .spin{
+    width:24px;height:24px;margin:0 auto 12px;
+    border:2.5px solid #3a3a3a;
+    border-top-color:var(--grass);
+    border-radius:50%;
+    animation:sp .8s linear infinite;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* 翻页 */
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 13px;border-top:1px solid var(--line)}
+  .pager button{
+    flex:1;padding:10px;font-size:13px;font-weight:600;
+    color:var(--text);background:var(--panel-3);
+    border:1px solid #454545;
+    border-radius:9px;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .pager button:hover{background:#414141}
+  .pager button:active{background:#2c2c2c}
+  .pager button:disabled{opacity:.38;cursor:not-allowed}
+  .pager .page-label{flex:0 0 auto;font-size:12px;color:var(--text-2);min-width:62px;text-align:center}
+
+  /* 设备状态 */
+  .kv{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;border-bottom:1px solid #333;font-size:13px}
+  .kv:last-child{border-bottom:0}
+  .kv-l{display:flex;align-items:center;gap:9px;color:var(--text-2)}
+  .kv-r{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--danger);box-shadow:0 0 6px rgba(217,83,79,.5)}
+  .dot.ok{background:var(--grass);box-shadow:0 0 6px rgba(93,161,63,.55)}
+  .dot.warn{background:var(--warn);box-shadow:0 0 6px rgba(217,164,65,.5)}
+
+  /* 底部播放条 */
+  .player-bar{
+    position:fixed;left:0;right:0;bottom:0;z-index:20;
+    background:rgba(34,34,34,.97);
+    backdrop-filter:blur(14px);
+    border-top:1px solid var(--line);
+    box-shadow:0 -6px 24px rgba(0,0,0,.5);
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    transform:translateY(120%);transition:transform .26s cubic-bezier(.2,.9,.3,1);
+  }
+  .player-bar.on{transform:translateY(0)}
+  .pb-row{display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  /* 播放条左侧：在线歌显示封面，本地歌显示旋转唱片 */
+  .pb-thumb{position:relative;width:44px;height:44px;flex:0 0 44px}
+  .pb-cover{
+    position:absolute;inset:0;width:44px;height:44px;
+    border-radius:50%;background:var(--slot);object-fit:cover;display:block;
+  }
+  .disc{position:absolute;inset:0;display:none}
+  .disc svg{width:100%;height:100%;display:block}
+  .pb-thumb.local .pb-cover{display:none}
+  .pb-thumb.local .disc{display:block}
+  .disc.playing{animation:discspin 6s linear infinite}
+  @keyframes discspin{to{transform:rotate(360deg)}}
+  .pb-info{flex:1;min-width:0}
+  .pb-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pb-artist{font-size:11px;color:var(--text-2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pb-close{
+    background:var(--panel-3);
+    border:1px solid #454545;
+    border-radius:8px;
+    color:var(--text-2);font-size:13px;cursor:pointer;padding:5px 10px;
+    transition:background .15s,color .15s;
+  }
+  .pb-close:hover{background:#434343;color:#fff}
+  /* 自定义播放控件（原生控件图标各浏览器不一样，不好看，所以隐藏） */
+  .pb-ctrl{display:flex;align-items:center;gap:10px}
+  .pb-play{
+    flex:0 0 auto;width:32px;height:32px;border-radius:50%;
+    background:linear-gradient(180deg,#6fb64c,#4d8a33);
+    border:1px solid #3d7028;
+    color:#fff;font-size:12px;cursor:pointer;
+    display:grid;place-items:center;
+    box-shadow:0 2px 0 var(--grass-dark);
+  }
+  .pb-play:active{transform:translateY(1px);box-shadow:0 1px 0 var(--grass-dark)}
+  .pb-seek{
+    flex:1;min-width:0;height:4px;-webkit-appearance:none;appearance:none;
+    background:#3a3a3a;border-radius:2px;outline:none;
+  }
+  .pb-seek::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--grass);border:2px solid #1e1e1e;cursor:pointer;
+  }
+  .pb-seek::-moz-range-thumb{
+    width:14px;height:14px;border-radius:50%;background:var(--grass);
+    border:2px solid #1e1e1e;cursor:pointer;
+  }
+  .pb-time{flex:0 0 auto;font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums}
+  .player-bar audio{display:none}
+
+  .toast{
+    margin:0 0 6px;padding:11px 13px;font-size:13px;display:none;line-height:1.55;
+    border-radius:10px;border:1px solid transparent;
+  }
+  .toast.on{display:block}
+  .toast.ok{background:rgba(93,161,63,.16);border-color:rgba(93,161,63,.45);color:#b6e59a}
+  .toast.err{background:rgba(217,83,79,.15);border-color:rgba(217,83,79,.45);color:#f0a09d}
+  .toast.wait{background:rgba(217,164,65,.13);border-color:rgba(217,164,65,.4);color:#ecc77e}
+  .hint{padding:0 4px;font-size:11px;color:#7a7a7a;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <!-- 音乐唱片：MC 的物品图标 -->
+    <div class="logo">
+      <svg viewBox="0 0 8 8" aria-hidden="true">
+        <circle cx="4" cy="4" r="3.5" fill="#141414"/>
+        <circle cx="4" cy="4" r="2.7" fill="none" stroke="#343434" stroke-width=".28"/>
+        <circle cx="4" cy="4" r="2.1" fill="none" stroke="#2b2b2b" stroke-width=".22"/>
+        <circle cx="4" cy="4" r="1.35" fill="#5da13f"/>
+        <circle cx="4" cy="4" r="0.38" fill="#1b1b1b"/>
+      </svg>
+    </div>
+    <div>
+      <h1>音乐库</h1>
+      <p class="sub" id="subtitle">搜索歌曲，点一下就能听</p>
+    </div>
+  </header>
+
+  <!-- 搜索 -->
+  <div class="card">
+    <div class="searchbox">
+      <input id="q" type="search" placeholder="搜歌手、歌名…" autocomplete="off">
+      <button id="btn-search">搜索</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- 结果 -->
+  <div class="card">
+    <div class="card-head"><span id="list-title">推荐</span><span id="list-count" style="font-size:12px"></span></div>
+    <div id="list">
+      <div class="empty"><div class="spin"></div>正在获取…</div>
+    </div>
+    <div class="pager" id="pager" style="display:none">
+      <button id="btn-prev">‹ 上一页</button>
+      <span class="page-label" id="page-label">第 1 页</span>
+      <button id="btn-next">下一页 ›</button>
+    </div>
+  </div>
+
+  <!-- SD 卡音乐 -->
+  <div class="card">
+    <div class="card-head">
+      <span>SD 卡音乐</span>
+      <button class="refresh" id="btn-local-refresh">刷新</button>
+    </div>
+    <div id="local-list">
+      <div class="empty"><div class="spin"></div>读取中…</div>
+    </div>
+  </div>
+
+  <!-- 设备状态 -->
+  <div class="card">
+    <div class="card-head"><span>设备状态</span><span id="link-state" style="font-size:12px">—</span></div>
+    <div class="kv">
+      <div class="kv-l"><span class="dot" id="dot-wifi"></span><span>Wi-Fi</span></div>
+      <div class="kv-r" id="v-ssid">—</div>
+    </div>
+    <div class="kv">
+      <div class="kv-l"><span class="dot" id="dot-sd"></span><span>SD 卡</span></div>
+      <div class="kv-r" id="v-sd">检测中…</div>
+    </div>
+  </div>
+
+  <p class="hint">歌曲来自 Apple 的公开搜索接口，只能试听 30 秒片段。想听完整的，把歌放进 SD 卡本地播放。</p>
+
+</div>
+
+<!-- 底部播放条 -->
+<div class="player-bar" id="pbar">
+  <div class="pb-row">
+    <div class="pb-thumb" id="pb-thumb">
+      <img class="pb-cover" id="pb-cover" alt="">
+      <!-- 唱片：本地播放时显示，播放中旋转 -->
+      <div class="disc" id="pb-disc">
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+          <circle cx="20" cy="20" r="19" fill="#141414"/>
+          <!-- 黑胶纹路 -->
+          <circle cx="20" cy="20" r="15.5" fill="none" stroke="#242424" stroke-width=".5"/>
+          <circle cx="20" cy="20" r="13"   fill="none" stroke="#2a2a2a" stroke-width=".5"/>
+          <circle cx="20" cy="20" r="10.5" fill="none" stroke="#242424" stroke-width=".5"/>
+          <circle cx="20" cy="20" r="8.5"  fill="none" stroke="#2a2a2a" stroke-width=".5"/>
+          <!-- 中心标签 -->
+          <circle cx="20" cy="20" r="6.6" fill="#5da13f"/>
+          <!-- ⚠️ 下面三样都是「不对称」的，旋转时才看得出来：
+               一个偏心白点、一条标签上的短线、一块高光 -->
+          <circle cx="22.4" cy="18.2" r="1.1" fill="#eafbe0" opacity=".95"/>
+          <rect x="19.5" y="20.4" width="1" height="4" rx=".5" fill="#1f3d14" opacity=".8"/>
+          <ellipse cx="13.5" cy="12" rx="4.5" ry="2.2" fill="#ffffff" opacity=".08"/>
+          <circle cx="20" cy="20" r="1.5" fill="#141414"/>
+        </svg>
+      </div>
+    </div>
+    <div class="pb-info">
+      <div class="pb-name" id="pb-name">—</div>
+      <div class="pb-artist" id="pb-artist">—</div>
+    </div>
+    <button class="pb-close" id="pb-close">✕</button>
+  </div>
+  <div class="pb-ctrl">
+    <button class="pb-play" id="pb-toggle">▶</button>
+    <input class="pb-seek" id="pb-seek" type="range" min="0" max="100" value="0" step="0.1">
+    <span class="pb-time" id="pb-time">0:00</span>
+  </div>
+  <audio id="player" preload="none"></audio>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var current = null;
+
+  function toast(msg, kind){
+    var t = $('toast');
+    t.className = 'toast on ' + (kind || 'wait');
+    t.textContent = msg;
+    if (kind === 'ok') setTimeout(function(){ t.className = 'toast'; }, 3000);
+  }
+  function clearToast(){ $('toast').className = 'toast'; }
+
+  function fmtDur(sec){
+    if (!sec || sec <= 0) return '';
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function render(songs, title){
+    var box = $('list');
+    $('list-title').textContent = title;
+    $('list-count').textContent = songs.length ? (songs.length + ' 首') : '';
+    box.innerHTML = '';
+
+    if (!songs.length){
+      box.innerHTML = '<div class="empty">没有找到结果<br>换个关键词试试</div>';
+      return;
+    }
+
+    songs.forEach(function(s){
+      var d = document.createElement('div');
+      d.className = 'song';
+      d.innerHTML =
+        '<img class="cover" alt="">' +
+        '<div class="song-info">' +
+          '<div class="song-name"></div>' +
+          '<div class="song-artist"></div>' +
+        '</div>' +
+        '<div class="song-dur"></div>';
+
+      var img = d.querySelector('.cover');
+      if (s.cover) img.src = s.cover;
+      d.querySelector('.song-name').textContent   = s.name || '未知曲目';
+      d.querySelector('.song-artist').textContent = s.artist || '';
+      d.querySelector('.song-dur').textContent    = fmtDur(s.duration);
+
+      d.onclick = function(){
+        play(s, d);
+      };
+
+      d._song = s;
+      box.appendChild(d);
+    });
+  }
+
+  function play(s, el){
+    current = s;
+    Array.prototype.forEach.call($('list').children, function(c){ c.classList.remove('playing'); });
+    Array.prototype.forEach.call($('local-list').children, function(c){ c.classList.remove('playing'); });
+    if (el) el.classList.add('playing');
+
+    $('pbar').classList.add('on');
+    $('pb-thumb').classList.remove('local');   /* 在线歌显示封面 */
+    $('pb-name').textContent = s.name || '未知曲目';
+    $('pb-artist').textContent = s.artist || '';
+    if (s.cover) $('pb-cover').src = s.cover; else $('pb-cover').removeAttribute('src');
+
+    var p = $('player');
+    /* 苹果只给 30 秒片段，没法延长。开循环至少能让这段一直放下去，
+       别刚听进去就断。 */
+    p.loop = true;
+    p.src = s.preview;
+    p.play().then(function(){ clearToast(); }).catch(function(err){
+      toast('播放失败：' + (err.message || '链接可能失效了'), 'err');
+    });
+  }
+
+  /* ── 分页状态 ── */
+  var PAGE_SIZE = 20;
+  var cur = { q: '', offset: 0 };
+
+  function updatePager(count){
+    $('pager').style.display = 'flex';
+    var page = Math.floor(cur.offset / PAGE_SIZE) + 1;
+    $('page-label').textContent = '第 ' + page + ' 页';
+    $('btn-prev').disabled = (cur.offset <= 0);
+    /* 本页没满 20 条，说明后面没有了 */
+    $('btn-next').disabled = (count < PAGE_SIZE);
+  }
+
+  function loadPage(offset, isNewSearch){
+    if (isNewSearch){
+      cur.q = $('q').value.trim();
+    }
+    if (!cur.q){ toast('输入歌手或歌名再搜', 'err'); return; }
+
+    cur.offset = offset;
+    $('btn-search').disabled = true;
+    $('btn-prev').disabled = true;
+    $('btn-next').disabled = true;
+    $('list-title').textContent = '搜索结果';
+    $('list').innerHTML = '<div class="empty"><div class="spin"></div>正在搜索…</div>';
+
+    fetch('/api/search?q=' + encodeURIComponent(cur.q) + '&offset=' + offset)
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        $('btn-search').disabled = false;
+        if (!j.ok){
+          toast(j.message || '搜索失败', 'err');
+          render([], '搜索结果');
+          $('pager').style.display = 'none';
+          return;
+        }
+        var songs = j.songs || [];
+        render(songs, '搜索结果');
+        updatePager(songs.length);
+        if (!songs.length && offset > 0) toast('后面没有更多了', 'wait');
+        else if (!songs.length) toast('没有找到「' + cur.q + '」', 'wait');
+      })
+      .catch(function(){
+        $('btn-search').disabled = false;
+        toast('请求失败，检查设备是否联网', 'err');
+        render([], '搜索结果');
+        $('pager').style.display = 'none';
+      });
+  }
+
+  function suggest(){
+    $('pager').style.display = 'none';
+    fetch('/api/suggest')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (j.ok) render(j.songs || [], '推荐');
+        else render([], '推荐');
+      })
+      .catch(function(){ render([], '推荐'); });
+  }
+
+  function refreshStatus(){
+    fetch('/status').then(function(r){ return r.json(); }).then(function(j){
+      var c = (j.state === 'connected');
+      $('dot-wifi').className = 'dot ' + (c ? 'ok' : 'warn');
+      $('v-ssid').textContent = c ? (j.ssid || '已连接') : '未连接';
+      $('link-state').textContent = c ? '在线' : '离线';
+      $('subtitle').textContent = c && j.ip ? ('设备在线 · ' + j.ip) : '搜索歌曲，点一下就能听';
+
+      var sd = j.sd || {};
+      $('dot-sd').className = 'dot ' + (sd.present ? 'ok' : '');
+      $('v-sd').textContent = sd.present ? '已就绪' : '未检测到';
+    }).catch(function(){});
+  }
+
+  /* ── SD 卡本地音乐 ── */
+  function fmtSize(bytes){
+    if (!bytes) return '';
+    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + 'MB';
+    return Math.round(bytes / 1024) + 'KB';
+  }
+
+  function loadLocal(){
+    var box = $('local-list');
+    fetch('/files').then(function(r){ return r.json(); }).then(function(j){
+      box.innerHTML = '';
+      var files = (j && j.files) || [];
+      if (!files.length){
+        box.innerHTML = '<div class="empty">SD 卡里没有 MP3<br>把歌拷进去再点刷新</div>';
+        return;
+      }
+      files.forEach(function(f){
+        var d = document.createElement('div');
+        d.className = 'song';
+        d.innerHTML =
+          '<div class="song-info">' +
+            '<div class="song-name"></div>' +
+          '</div>' +
+          '<div class="song-dur"></div>';
+        d.querySelector('.song-name').textContent = f.name.replace(/\.mp3$/i, '');
+
+        /* 时长 + 文件大小，能拿到哪个显示哪个 */
+        var meta = [];
+        if (f.duration > 0) meta.push(fmtDur(f.duration));
+        if (f.size > 0)     meta.push(fmtSize(f.size));
+        d.querySelector('.song-dur').textContent = meta.join(' · ');
+
+        d.onclick = function(){ playLocal(f.name, d); };
+        box.appendChild(d);
+      });
+    }).catch(function(){
+      box.innerHTML = '<div class="empty">读取失败，SD 卡可能没插</div>';
+    });
+  }
+
+  function playLocal(name, el){
+    Array.prototype.forEach.call($('list').children, function(c){ c.classList.remove('playing'); });
+    Array.prototype.forEach.call($('local-list').children, function(c){ c.classList.remove('playing'); });
+    if (el) el.classList.add('playing');
+
+    $('pbar').classList.add('on');
+    $('pb-thumb').classList.add('local');      /* 本地歌显示旋转唱片 */
+    $('pb-name').textContent = name.replace(/\.mp3$/i, '');
+    $('pb-artist').textContent = 'SD 卡';
+    $('pb-cover').removeAttribute('src');
+
+    var p = $('player');
+    p.loop = false;                 /* 本地歌听完就停，不循环 */
+    p.src = '/play?file=' + encodeURIComponent(name);
+    p.play().then(function(){ clearToast(); }).catch(function(err){
+      toast('播放失败：' + (err.message || '文件可能损坏'), 'err');
+    });
+  }
+
+  $('btn-local-refresh').onclick = loadLocal;
+
+  $('btn-search').onclick = function(){ loadPage(0, true); };
+  $('btn-prev').onclick   = function(){ loadPage(Math.max(0, cur.offset - PAGE_SIZE), false); };
+  $('btn-next').onclick   = function(){ loadPage(cur.offset + PAGE_SIZE, false); };
+  $('q').addEventListener('keydown', function(e){ if (e.key === 'Enter') loadPage(0, true); });
+  /* ── 自定义播放控件：播放键 / 进度条 / 唱片旋转 ── */
+  var audio   = $('player');
+  var disc    = $('pb-disc');
+  var seeking = false;        /* 是否正在拖动进度条 */
+
+  function fmtTime(sec){
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  $('pb-toggle').onclick = function(){
+    if (audio.paused) {
+      audio.play().catch(function(){});
+    } else {
+      audio.pause();
+    }
+  };
+
+  audio.addEventListener('play', function(){
+    $('pb-toggle').textContent = '❚❚';
+    disc.classList.add('playing');
+  });
+  audio.addEventListener('pause', function(){
+    $('pb-toggle').textContent = '▶';
+    disc.classList.remove('playing');
+  });
+  audio.addEventListener('ended', function(){
+    $('pb-toggle').textContent = '▶';
+    disc.classList.remove('playing');
+  });
+  audio.addEventListener('timeupdate', function(){
+    if (seeking) return;                       /* 正在拖进度条，别抢滑块的显示 */
+    if (!isFinite(audio.duration) || audio.duration <= 0) return;
+    $('pb-seek').value = (audio.currentTime / audio.duration) * 100;
+    $('pb-time').textContent = fmtTime(audio.currentTime);
+  });
+  audio.addEventListener('loadedmetadata', function(){
+    $('pb-seek').value = 0;
+    $('pb-time').textContent = '0:00';
+  });
+
+  /* 拖动时只更新时间和滑块，松手（change）才真正跳转。
+     网络流每跳一次都会重新发 Range 请求，拖动过程中连续跳会很卡。 */
+  var seekTimer = null;
+
+  $('pb-seek').addEventListener('input', function(){
+    seeking = true;
+    if (isFinite(audio.duration) && audio.duration > 0) {
+      $('pb-time').textContent = fmtTime((this.value / 100) * audio.duration);
+    }
+  });
+
+  $('pb-seek').addEventListener('change', function(){
+    if (!isFinite(audio.duration) || audio.duration <= 0) {
+      seeking = false;
+      return;
+    }
+    audio.currentTime = (this.value / 100) * audio.duration;
+
+    /* ⚠️ 这里绝对不能立刻 seeking = false。
+       设 currentTime 只是"请求跳转"，真正跳完要等 seeked 事件；
+       这中间 timeupdate 还带着旧的播放位置回来，一刷新滑块就弹回原处
+       —— 手机上"点一下先瞬移、又弹回开头"就是这么来的。
+       所以保持 seeking=true，等 seeked 或超时兜底再恢复。 */
+    clearTimeout(seekTimer);
+    seekTimer = setTimeout(function(){ seeking = false; }, 5000);
+  });
+
+  /* 真正跳完了，才允许 timeupdate 继续刷新滑块 */
+  audio.addEventListener('seeked', function(){
+    seeking = false;
+    clearTimeout(seekTimer);
+  });
+
+  $('pb-close').onclick = function(){ $('pbar').classList.remove('on'); $('player').pause(); };
+  $('player').addEventListener('error', function(){ toast('这段试听加载失败，换一首试试', 'err'); });
+
+  suggest();
+  loadLocal();
+  refreshStatus();
+  setInterval(refreshStatus, 6000);
+})();
+</script>
+</body>
+</html>

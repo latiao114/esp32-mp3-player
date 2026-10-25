@@ -1,0 +1,19 @@
+# ESP32-S3 音乐播放器 —— 分区表（16MB Flash）
+#
+# 默认分区表只给 app 分 1MB，现在固件已经涨到 1MB 了（只剩 2%），
+# 后面还要加 MP3 解码、SD 卡、OLED，必须扩。
+#
+# 位号  名称      类型      偏移       大小        说明
+# ─────────────────────────────────────────────────────────────
+# 0     nvs       data/nvs  0x9000     24 KB      WiFi 配置等
+# 1     phy_init  data/phy  0xF000      4 KB      射频校准
+# 2     factory   app       0x10000     4 MB      固件
+# 3     storage   data/fat  0x410000   ~12 MB     音乐存储（SD 卡没到时可先用内部 Flash）
+#
+# 总容量 16MB = 0x1000000
+
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+phy_init,   data, phy,     0xf000,   0x1000,
+factory,    app,  factory, 0x10000,  0x400000,
+storage,    data, fat,     0x410000, 0xbf0000,
